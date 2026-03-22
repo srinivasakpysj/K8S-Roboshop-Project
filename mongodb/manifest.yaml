@@ -1,30 +1,31 @@
-apiVersion: apps/v1                # Correct API group for Deployment
-kind: Deployment                  # Deployment manages ReplicaSets and enables rolling updates
+apiVersion: apps/v1                  # API group for Deployment resources
+kind: Deployment                     # Deployment manages ReplicaSets and Pods
 
 metadata:
-  name: mongodb                     # Name of the Deployment
-  labels:                         # Labels for identifying the Deployment object
+  name: mongodb                      # Name of the Deployment
+  namespace: roboshop                # Namespace where this Deployment will be created (must exist)
+  labels:                            # Labels for identifying this Deployment
     project: roboshop
     component: mongodb
     tier: db
 
 spec:
-  replicas: 1                     # Desired number of Pods (managed via ReplicaSet created by Deployment)
+  replicas: 1                        # Number of desired Pods (DB usually runs as single instance unless clustered)
 
-  selector:                       # Defines how Deployment identifies Pods (via ReplicaSet)
-    matchLabels:                  # Must EXACTLY match template labels
+  selector:                          # Used to identify Pods managed by this Deployment
+    matchLabels:                     # Must EXACTLY match template labels
       project: roboshop
       component: mongodb
       tier: db
 
-  template:                       # Pod template (used to create Pods via ReplicaSet)
+  template:                          # Pod template (used to create Pods)
     metadata:
-      labels:                     # Labels assigned to Pods
+      labels:                        # Labels assigned to Pods
         project: roboshop
         component: mongodb
         tier: db
 
     spec:
       containers:
-      - name: mongodb               # Container name
-        image: nginx:latest  # Specific nginx image version (Debian trixie + perl support)
+      - name: mongodb                # Container name
+        image: srinivasakysj/mongodb:v1   # Custom MongoDB image (must exist in registry)
