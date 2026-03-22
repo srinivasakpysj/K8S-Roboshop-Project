@@ -1,0 +1,68 @@
+apiVersion: apps/v1                  # Uses 'apps' API group (required for Deployment)
+kind: Deployment                     # Deployment manages ReplicaSets → which manage Pods
+
+metadata:
+  name: catalogue                    # Unique name of Deployment
+  namespace: roboshop                # Namespace isolation (must exist before applying)
+  labels:
+    project: roboshop                # Logical grouping label (used across all components)
+    component: catalogue            # Identifies this microservice
+    tier: backend                   # Indicates architecture layer (backend service)
+
+spec:
+  replicas: 1                        # Number of Pods to run (Deployment ensures this state)
+
+  selector:
+    matchLabels:                     # Deployment uses this to identify its Pods
+      project: roboshop              # MUST match template labels exactly
+      component: catalogue
+      tier: backend
+
+  template:                          # Blueprint used to create Pods
+    metadata:
+      labels:                        # Labels assigned to Pods
+        project: roboshop
+        component: catalogue
+        tier: backend
+
+    spec:
+      containers:
+      - name: catalogue              # Container name inside Pod
+        image: srinivasakysj/catalogue:v1   # Application image (must be available in registry)
+
+        ports:
+        - name: liveness-port        # Named port (used in probes instead of number)
+          containerPort: 8080        # Application runs on port 8080
+
+        readinessProbe:              # Determines when Pod is READY to receive traffic
+          httpGet:                   # HTTP-based health check (common for backend APIs)
+            path: /health            # Endpoint your app must expose
+            port: liveness-port      # Uses named port (maps to 8080)
+          failureThreshold: 1        # After 1 failure → mark as NOT READY
+          periodSeconds: 15          # Check every 15 seconds
+
+        livenessProbe:               # Determines if container is ALIVE
+          httpGet:
+            path: /health            # Same health endpoint
+            port: liveness-port
+          failureThreshold: 1        # After 1 failure → restart container
+          periodSeconds: 15          # Check every 15 seconds
+
+---
+apiVersion: v1                      # Core API group
+kind: Service                       # Service exposes Pods via stable network endpoint
+
+metadata:
+  name: catalogue                   # Service name (used as DNS: catalogue.roboshop)
+  namespace: roboshop
+
+spec:
+  selector:                         # Matches Pods using labels
+    project: roboshop               # Must EXACTLY match Pod labels
+    component: catalogue
+    tier: backend
+
+  ports:
+  - protocol: TCP                   # Network protocol
+    port: 8080                      # Service port (used by other services)
+    targetPort: 8080                # Container port inside Pod
