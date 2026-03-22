@@ -1,0 +1,30 @@
+apiVersion: apps/v1                # Correct API group for Deployment
+kind: Deployment                  # Deployment manages ReplicaSets and enables rolling updates
+
+metadata:
+  name: mongodb                     # Name of the Deployment
+  labels:                         # Labels for identifying the Deployment object
+    project: roboshop
+    component: mongodb
+    tier: db
+
+spec:
+  replicas: 1                     # Desired number of Pods (managed via ReplicaSet created by Deployment)
+
+  selector:                       # Defines how Deployment identifies Pods (via ReplicaSet)
+    matchLabels:                  # Must EXACTLY match template labels
+      project: roboshop
+      component: mongodb
+      tier: db
+
+  template:                       # Pod template (used to create Pods via ReplicaSet)
+    metadata:
+      labels:                     # Labels assigned to Pods
+        project: roboshop
+        component: mongodb
+        tier: db
+
+    spec:
+      containers:
+      - name: mongodb               # Container name
+        image: nginx:latest  # Specific nginx image version (Debian trixie + perl support)
