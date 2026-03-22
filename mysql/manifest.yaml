@@ -40,7 +40,7 @@ spec:
         livenessProbe:               # Checks if Pod is ALIVE (restarts if unhealthy)
           tcpSocket:
             port: 3306              # If port not responding → container restart
-          initialDelaySeconds: 5     # Starts checking after 5s (⚠️ may be too early for DB)
+          initialDelaySeconds: 20     # Starts checking after 5s (⚠️ may be too early for DB)
           periodSeconds: 5           # Check every 5 seconds
 
 ---
