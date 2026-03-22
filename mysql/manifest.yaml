@@ -1,0 +1,63 @@
+apiVersion: apps/v1                  # Uses 'apps' API group (required for Deployment resource)
+kind: Deployment                     # Deployment = higher-level controller managing ReplicaSets + Pods
+
+metadata:
+  name: mysql                      # Unique name of Deployment within the namespace
+  namespace: roboshop                # Logical isolation; all resources will be created inside this namespace
+  labels:                            # Labels for organizing and identifying this Deployment
+    project: roboshop                # Project name (used for grouping resources)
+    component: mysql              # Component type (DB layer identification)
+    tier: db                         # Tier classification (frontend/backend/db architecture)
+
+spec:
+  replicas: 1                        # Desired number of Pods (Deployment ensures this count is always maintained)
+
+  selector:                          # Tells Deployment how to find/manage its Pods
+    matchLabels:                     # Label matching rule (must EXACTLY match template labels below)
+      project: roboshop
+      component: mysql
+      tier: db
+
+  template:                          # Blueprint/template used to create Pods
+    metadata:
+      labels:                        # Labels applied to Pods created by this Deployment
+        project: roboshop
+        component: mysql
+        tier: db
+
+    spec:
+      containers:                    # List of containers inside the Pod (usually 1 for simple apps)
+      - name: mysql                # Name of container (used internally by Kubernetes)
+        image: srinivasakysj/mysql:v1   # Docker image (must exist in registry)
+        imagePullPolicy: Always      # Always pulls image from registry (even if already present locally)
+
+        readinessProbe:              # Checks if Pod is READY to accept traffic
+          tcpSocket:                 # Uses TCP check (not HTTP) → suitable for DB services
+            port: 3306              # mysql default port
+          initialDelaySeconds: 10    # Wait 10s before first readiness check (allow DB startup)
+          periodSeconds: 10          # Check every 10 seconds
+
+        livenessProbe:               # Checks if Pod is ALIVE (restarts if unhealthy)
+          tcpSocket:
+            port: 3306              # If port not responding → container restart
+          initialDelaySeconds: 5     # Starts checking after 5s (⚠️ may be too early for DB)
+          periodSeconds: 5           # Check every 5 seconds
+
+---
+apiVersion: v1                      # Core API group (used for Service, Pod, ConfigMap, etc.)
+kind: Service                       # Service exposes Pods internally (or externally)
+
+metadata:
+  name: mysql                     # Service name (used as DNS inside cluster)
+  namespace: roboshop               # Same namespace as Deployment
+
+spec:
+  selector:                         # Used to identify which Pods this Service should route traffic to
+    project: roboshop               # Must match Pod labels EXACTLY
+    component: mysql
+    tier: db
+
+  ports:
+  - protocol: TCP                   # Network protocol
+    port: 3306                     # Service port (clients connect to this)
+    targetPort: 3306               # Container port inside Pod where traffic is forwarded
