@@ -1,0 +1,17 @@
+apiVersion: v1                    # Core Kubernetes API group (used for basic resources like Pod, Service)
+kind: Pod                         # Defines a single Pod (used here for debugging purposes)
+
+metadata:
+  name: debug                     # Name of the Pod (must be unique in the namespace)
+  namespace: roboshop             # Pod will be created inside 'roboshop' namespace
+
+  labels:                         # Key-value pairs used for identification and selection
+    name: debug                   # Custom label (can be used by Services or for filtering)
+    project: roboshop             # Helps group resources under same project
+
+spec:
+  containers:                     # List of containers inside this Pod
+  - name: debug                   # Container name (used internally by Kubernetes)
+    image: srinivasakysj/debug:v1 # Custom debug image (should contain tools like curl, ping, telnet, etc.)
+
+    imagePullPolicy: Always       # Always pulls latest image from registry (useful for testing/debugging)

@@ -1,57 +1,63 @@
-apiVersion: apps/v1                  # API group for Deployment resources
-kind: Deployment                     # Deployment manages ReplicaSets and Pods
+apiVersion: apps/v1                  # Uses 'apps' API group (required for Deployment resource)
+kind: Deployment                     # Deployment = higher-level controller managing ReplicaSets + Pods
 
 metadata:
-  name: mongodb                      # Name of the Deployment
-  namespace: roboshop                # Namespace where this Deployment will be created (must exist)
-  labels:                            # Labels for identifying this Deployment
-    project: roboshop
-    component: mongodb
-    tier: db
+  name: mongodb                      # Unique name of Deployment within the namespace
+  namespace: roboshop                # Logical isolation; all resources will be created inside this namespace
+  labels:                            # Labels for organizing and identifying this Deployment
+    project: roboshop                # Project name (used for grouping resources)
+    component: mongodb              # Component type (DB layer identification)
+    tier: db                         # Tier classification (frontend/backend/db architecture)
 
 spec:
-  replicas: 1                        # Number of desired Pods (DB usually runs as single instance unless clustered)
+  replicas: 1                        # Desired number of Pods (Deployment ensures this count is always maintained)
 
-  selector:                          # Used to identify Pods managed by this Deployment
-    matchLabels:                     # Must EXACTLY match template labels
+  selector:                          # Tells Deployment how to find/manage its Pods
+    matchLabels:                     # Label matching rule (must EXACTLY match template labels below)
       project: roboshop
       component: mongodb
       tier: db
 
-  template:                          # Pod template (used to create Pods)
+  template:                          # Blueprint/template used to create Pods
     metadata:
-      labels:                        # Labels assigned to Pods
+      labels:                        # Labels applied to Pods created by this Deployment
         project: roboshop
         component: mongodb
         tier: db
 
     spec:
-      containers:
-      - name: mongodb                # Container name
-        image: srinivasakysj/mongodb:v1   # Custom MongoDB image (must exist in registry)
-        imagePullPolicy: Always
-        readinessProbe:
+      containers:                    # List of containers inside the Pod (usually 1 for simple apps)
+      - name: mongodb                # Name of container (used internally by Kubernetes)
+        image: srinivasakysj/mongodb:v1   # Docker image (must exist in registry)
+        imagePullPolicy: Always      # Always pulls image from registry (even if already present locally)
+
+        readinessProbe:              # Checks if Pod is READY to accept traffic
+          tcpSocket:                 # Uses TCP check (not HTTP) → suitable for DB services
+            port: 27017              # MongoDB default port
+          initialDelaySeconds: 10    # Wait 10s before first readiness check (allow DB startup)
+          periodSeconds: 10          # Check every 10 seconds
+
+        livenessProbe:               # Checks if Pod is ALIVE (restarts if unhealthy)
           tcpSocket:
-            port: 27017
-          initialDelaySeconds: 10
-          periodSeconds: 10
-        livenessProbe:
-          tcpSocket:
-            port: 27017
-          initialDelaySeconds: 5
-          periodSeconds: 5
+            port: 27017              # If port not responding → container restart
+          initialDelaySeconds: 5     # Starts checking after 5s (⚠️ may be too early for DB)
+          periodSeconds: 5           # Check every 5 seconds
+
 ---
-apiVersion: v1
-kind: Service
+apiVersion: v1                      # Core API group (used for Service, Pod, ConfigMap, etc.)
+kind: Service                       # Service exposes Pods internally (or externally)
+
 metadata:
-  name: mongodb
-  namespace: roboshop
+  name: mongodb                     # Service name (used as DNS inside cluster)
+  namespace: roboshop               # Same namespace as Deployment
+
 spec:
-  selector:
-    project: roboshop
+  selector:                         # Used to identify which Pods this Service should route traffic to
+    project: roboshop               # Must match Pod labels EXACTLY
     component: mongodb
     tier: db
+
   ports:
-  - protocol: TCP
-    port: 27017
-    targetPort: 27017
+  - protocol: TCP                   # Network protocol
+    port: 27017                     # Service port (clients connect to this)
+    targetPort: 27017               # Container port inside Pod where traffic is forwarded
