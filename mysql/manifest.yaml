@@ -1,63 +1,97 @@
-apiVersion: apps/v1                  # Uses 'apps' API group (required for Deployment resource)
-kind: Deployment                     # Deployment = higher-level controller managing ReplicaSets + Pods
+apiVersion: v1                         # Core API group (used for ConfigMap, Service, etc.)
+kind: ConfigMap                        # ConfigMap stores non-sensitive configuration files
 
 metadata:
-  name: mysql                      # Unique name of Deployment within the namespace
-  namespace: roboshop                # Logical isolation; all resources will be created inside this namespace
-  labels:                            # Labels for organizing and identifying this Deployment
-    project: roboshop                # Project name (used for grouping resources)
-    component: mysql              # Component type (DB layer identification)
-    tier: db                         # Tier classification (frontend/backend/db architecture)
+  name: mysql                          # Name of ConfigMap (referenced in Deployment)
+  namespace: roboshop                  # Must match Deployment namespace
+
+data:
+  my.cnf: |                            # Key = filename, value = file content (multi-line using |)
+    [mysqld]                           # MySQL server configuration section
+    innodb_redo_log_capacity=2G        # Example tuning parameter for redo log size
+
+---
+apiVersion: apps/v1                    # API group for Deployment resources
+kind: Deployment                      # Deployment manages ReplicaSets → Pods
+
+metadata:
+  name: mysql                          # Deployment name
+  namespace: roboshop                  # Namespace where resources are created
+  labels:
+    project: roboshop                  # Logical grouping label
+    component: mysql                  # Identifies MySQL service
+    tier: db                          # Database layer
 
 spec:
-  replicas: 1                        # Desired number of Pods (Deployment ensures this count is always maintained)
+  replicas: 1                          # Single Pod (DB typically runs as single instance)
 
-  selector:                          # Tells Deployment how to find/manage its Pods
-    matchLabels:                     # Label matching rule (must EXACTLY match template labels below)
-      project: roboshop
+  selector:
+    matchLabels:                       # Used to identify Pods managed by Deployment
+      project: roboshop                # MUST match template labels exactly
       component: mysql
       tier: db
 
-  template:                          # Blueprint/template used to create Pods
+  template:
     metadata:
-      labels:                        # Labels applied to Pods created by this Deployment
+      labels:                          # Labels applied to Pods
         project: roboshop
         component: mysql
         tier: db
 
     spec:
-      containers:                    # List of containers inside the Pod (usually 1 for simple apps)
-      - name: mysql                # Name of container (used internally by Kubernetes)
-        image: srinivasakysj/mysql:v1   # Docker image (must exist in registry)
-        imagePullPolicy: Always      # Always pulls image from registry (even if already present locally)
+      containers:
+      - name: mysql                    # Container name
+        image: srinivasakysj/mysql:v1 # MySQL image (must exist in registry)
+        imagePullPolicy: IfNotPresent # Pull image only if not already present (better for performance)
 
-        readinessProbe:              # Checks if Pod is READY to accept traffic
-          tcpSocket:                 # Uses TCP check (not HTTP) → suitable for DB services
-            port: 3306              # mysql default port
-          initialDelaySeconds: 10    # Wait 10s before first readiness check (allow DB startup)
-          periodSeconds: 10          # Check every 10 seconds
+        env:                           # Environment variables required for MySQL startup
+        - name: MYSQL_ROOT_PASSWORD    # Root password (MANDATORY for MySQL)
+          value: password              # ⚠️ Use Secret in production
+        - name: MYSQL_DATABASE         # Default database to create
+          value: catalogue
 
-        livenessProbe:               # Checks if Pod is ALIVE (restarts if unhealthy)
+        ports:
+        - containerPort: 3306          # MySQL listens on port 3306
+
+        readinessProbe:                # Checks if DB is ready to accept connections
+          tcpSocket:                  # TCP check (MySQL has no HTTP endpoint)
+            port: 3306
+          initialDelaySeconds: 20      # Wait before first check (DB startup time)
+          periodSeconds: 10            # Check every 10 seconds
+          failureThreshold: 3          # Allow 3 failures before marking NOT READY
+
+        livenessProbe:                 # Checks if DB is alive (restarts if unhealthy)
           tcpSocket:
-            port: 3306              # If port not responding → container restart
-          initialDelaySeconds: 20     # Starts checking after 5s (⚠️ may be too early for DB)
-          periodSeconds: 5           # Check every 5 seconds
+            port: 3306
+          initialDelaySeconds: 30      # Start later to avoid premature restart
+          periodSeconds: 10            # Check every 10 seconds
+          failureThreshold: 3          # Restart only after multiple failures
+
+        volumeMounts:
+        - name: mysql-config           # Volume name
+          mountPath: /etc/mysql/conf.d/my.cnf  # Path inside container
+          subPath: my.cnf              # Mount only this file (not full directory)
+
+      volumes:
+      - name: mysql-config             # Volume definition
+        configMap:
+          name: mysql                 # Refers to ConfigMap above
 
 ---
-apiVersion: v1                      # Core API group (used for Service, Pod, ConfigMap, etc.)
-kind: Service                       # Service exposes Pods internally (or externally)
+apiVersion: v1                        # Core API group
+kind: Service                         # Service exposes MySQL inside cluster
 
 metadata:
-  name: mysql                     # Service name (used as DNS inside cluster)
-  namespace: roboshop               # Same namespace as Deployment
+  name: mysql                         # Service name (DNS: mysql.roboshop)
+  namespace: roboshop
 
 spec:
-  selector:                         # Used to identify which Pods this Service should route traffic to
-    project: roboshop               # Must match Pod labels EXACTLY
+  selector:                           # Routes traffic to Pods with matching labels
+    project: roboshop                 # Must EXACTLY match Pod labels
     component: mysql
     tier: db
 
   ports:
-  - protocol: TCP                   # Network protocol
-    port: 3306                     # Service port (clients connect to this)
-    targetPort: 3306               # Container port inside Pod where traffic is forwarded
+  - protocol: TCP                     # Network protocol
+    port: 3306                        # Service port (clients use this)
+    targetPort: 3306                  # Container port inside Pod
