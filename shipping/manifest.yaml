@@ -1,0 +1,87 @@
+apiVersion: v1                      # Core Kubernetes API group (used for ConfigMap, Service, etc.)
+kind: ConfigMap                     # Stores non-sensitive configuration as key-value pairs
+
+metadata:
+  name: shipping                    # Name of ConfigMap (referenced in Deployment)
+  namespace: roboshop               # Must match Deployment namespace
+
+data:
+  CART_ENDPOINT: "cart:8080"        # Cart service DNS + port (used for inter-service communication)
+  DB_HOST: "mysql"                  # MySQL Service name (used for DB connection)
+
+---
+apiVersion: apps/v1                 # API group for Deployment resources
+kind: Deployment                   # Deployment manages ReplicaSets → Pods
+
+metadata:
+  name: shipping                    # Deployment name
+  namespace: roboshop               # Namespace where resources are created
+  labels:
+    project: roboshop               # Logical grouping label
+    component: shipping             # Identifies this microservice
+    tier: backend                   # Backend layer
+
+spec:
+  replicas: 1                       # Desired number of Pods
+
+  selector:
+    matchLabels:                    # Used by Deployment to identify its Pods
+      project: roboshop             # MUST match template labels exactly
+      component: shipping
+      tier: backend
+
+  template:
+    metadata:
+      labels:                       # Labels applied to Pods
+        project: roboshop
+        component: shipping
+        tier: backend
+
+    spec:
+      containers:
+      - name: shipping              # Container name
+        image: srinivasakysj/shipping:v1   # Application image
+        imagePullPolicy: IfNotPresent      # Pull image only if not present (better for performance)
+
+        envFrom:
+        - configMapRef:
+            name: shipping          # Injects all ConfigMap keys as environment variables
+
+        ports:
+        - name: http-port           # Named port used in probes
+          containerPort: 8080       # Application runs on port 8080
+
+        readinessProbe:             # Determines when Pod is READY to receive traffic
+          httpGet:
+            path: /health           # Health endpoint exposed by app
+            port: http-port
+          initialDelaySeconds: 10   # Wait before first check (app startup time)
+          periodSeconds: 15         # Check every 15 seconds
+          failureThreshold: 3       # Allow retries before marking NOT READY
+
+        livenessProbe:              # Determines if container is ALIVE
+          httpGet:
+            path: /health           # Same endpoint used for liveness
+            port: http-port
+          initialDelaySeconds: 20   # Delay to avoid premature restarts
+          periodSeconds: 15         # Check interval
+          failureThreshold: 3       # Restart only after multiple failures
+
+---
+apiVersion: v1                     # Core API group
+kind: Service                      # Exposes Pods via stable DNS and load balancing
+
+metadata:
+  name: shipping                   # Service name (used as DNS inside cluster)
+  namespace: roboshop
+
+spec:
+  selector:                        # Matches Pods using labels
+    project: roboshop              # Must EXACTLY match Pod labels
+    component: shipping
+    tier: backend
+
+  ports:
+  - protocol: TCP                  # Network protocol
+    port: 8080                     # Service port (clients use this)
+    targetPort: 8080               # Container port inside Pod
