@@ -29,8 +29,13 @@ spec:
       containers:                    # List of containers inside Pod
       - name: rabbitmq                  # Container name
         image: rabbitmq:3             # Official rabbitmq image (version 7.0)
+        env:
+        - name: RABBITMQ_DEFAULT_USER
+          value: roboshop
+        - name: RABBITMQ_DEFAULT_PASS
+          value: roboshop123
         imagePullPolicy: Always      # Always pulls image from registry (good for dev/testing)
-
+      
         readinessProbe:              # Determines if Pod is READY to accept traffic
           tcpSocket:                 # TCP-based check (suitable for rabbitmq, no HTTP endpoint)
             port: 5672               # rabbitmq default port
