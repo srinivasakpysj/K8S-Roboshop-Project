@@ -42,7 +42,7 @@ spec:
       containers:
       - name: frontend                  # Container name
         image: srinivasakysj/frontend:v1   # Application image
-        imagePullPolicy: IfNotPresent  # Pull image only if not present (better for performance)
+        imagePullPolicy: always  # Pull image only if not present (better for performance)
         ports:
         - name: http-port           # Named port (used in probes)
           containerPort: 80       # Application runs on port 80
