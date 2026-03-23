@@ -1,0 +1,63 @@
+apiVersion: apps/v1                  # API group for Deployment resources
+kind: Deployment                     # Deployment manages ReplicaSets which in turn manage Pods
+
+metadata:
+  name: rabbitmq                        # Name of the Deployment (unique within namespace)
+  namespace: roboshop                # Namespace where this Deployment will be created
+  labels:
+    project: roboshop                # Logical grouping label across all services
+    component: rabbitmq                 # Identifies this component (rabbitmq service)
+    tier: db                         # Indicates database layer in architecture
+
+spec:
+  replicas: 1                        # Desired number of Pods (Deployment ensures 1 always runs)
+
+  selector:
+    matchLabels:                     # Used by Deployment to identify its Pods
+      project: roboshop              # MUST match Pod template labels exactly
+      component: rabbitmq
+      tier: db
+
+  template:                          # Pod template (blueprint for creating Pods)
+    metadata:
+      labels:                        # Labels assigned to Pods
+        project: roboshop
+        component: rabbitmq
+        tier: db
+
+    spec:
+      containers:                    # List of containers inside Pod
+      - name: rabbitmq                  # Container name
+        image: rabbitmq:3             # Official rabbitmq image (version 7.0)
+        imagePullPolicy: Always      # Always pulls image from registry (good for dev/testing)
+
+        readinessProbe:              # Determines if Pod is READY to accept traffic
+          tcpSocket:                 # TCP-based check (suitable for rabbitmq, no HTTP endpoint)
+            port: 5672               # rabbitmq default port
+          initialDelaySeconds: 15    # Wait 10 seconds before first check (startup time)
+          periodSeconds: 10          # Check every 10 seconds
+
+        livenessProbe:               # Determines if container is ALIVE
+          tcpSocket:
+            port: 5672               # If port is not reachable → container will be restarted
+          initialDelaySeconds: 20     # Starts checking after 5 seconds (⚠️ may be slightly early)
+          periodSeconds: 5           # Check every 5 seconds
+
+---
+apiVersion: v1                      # Core API group for Service resource
+kind: Service                       # Service exposes Pods via stable network endpoint
+
+metadata:
+  name: rabbitmq                       # Service name (used as DNS inside cluster)
+  namespace: roboshop               # Same namespace as Deployment
+
+spec:
+  selector:                         # Service routes traffic to Pods matching these labels
+    project: roboshop               # Must EXACTLY match Pod labels
+    component: rabbitmq
+    tier: db
+
+  ports:
+  - protocol: TCP                   # Network protocol used
+    port: 5672                      # Service port (clients connect using this)
+    targetPort: 5672                # Container port inside Pod where traffic is forwarded
